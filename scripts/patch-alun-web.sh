@@ -57,14 +57,22 @@ def save(path: Path, text: str) -> None:
 
 
 def apply(path: Path, old: str, new: str, *, marker: str, label: str) -> bool:
-    """幂等替换：已含 marker 则跳过。返回是否真的改动。"""
+    """幂等替换：锚点已消失且补丁代码已在位 → 跳过。返回是否真的改动。
+
+    判据不依赖 marker 的字面前缀（marker 曾用旧项目名，改名不能导致已打的补丁
+    被重复插入）：只要「原锚点不存在」+「新代码的固定片段存在」就认定已打过。
+    """
     text = load(path)
-    if marker in text and new.split(marker, 1)[0][-40:] in text:
-        print(f"  [skip] {label}（已打过）")
-        return False
+    sig = new.split(marker, 1)[0][-40:]   # 补丁代码在 marker 之前的那 40 字符，作为签名
     if old not in text:
+        if sig in text:
+            print(f"  [skip] {label}（已打过）")
+            return False
         print(f"  [FAIL] {label}：锚点未命中 {path}", file=sys.stderr)
         raise SystemExit(3)
+    if sig in text and marker in text:
+        print(f"  [skip] {label}（已打过）")
+        return False
     text = text.replace(old, new, 1)
     save(path, text)
     print(f"  [ok]   {label}")
