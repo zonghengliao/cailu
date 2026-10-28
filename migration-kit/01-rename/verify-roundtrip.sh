@@ -70,7 +70,8 @@ else
 fi
 P1="$WORK/step1"     # 第一方向产物
 P2="$WORK/step2"     # 第二方向产物（应 == BASE）
-mkdir -p "$P1" "$P2"
+BASE_CLEAN="$WORK/base-clean"  # 基准树的「受版本管理文件」快照（避免把 target/node_modules 等运行态算进 diff）
+mkdir -p "$P1" "$P2" "$BASE_CLEAN"
 
 # 只复制「纳入版本管理的文件」，避开 node_modules / target / 运行时目录
 copy_tree() {  # $1=src  $2=dst
@@ -119,9 +120,11 @@ bash "$RENAME" $D2 --root "$P2" --no-backup >"$OUT_FWD" 2>&1
 RC_FWD=$?
 if [ $RC_FWD -eq 0 ]; then ok "执行成功（退出码 0）"; else bad "执行失败（退出码 $RC_FWD），见 $OUT_FWD"; fi
 
-echo "[3/4] 逐字节比对 往返结果 vs 基准树"
+echo "[3/4] 逐字节比对 往返结果 vs 基准树（只比受版本管理的文件）"
+copy_tree "$BASE" "$BASE_CLEAN" 2>/dev/null || { tar -C "$BASE" --exclude=.git --exclude=node_modules \
+  --exclude=target --exclude=dist -cf - . | tar -x -C "$BASE_CLEAN"; }
 DIFFOUT="$WORK/diff.txt"
-if diff -r --exclude=.git "$P2" "$BASE" >"$DIFFOUT" 2>&1; then
+if diff -r --exclude=.git "$P2" "$BASE_CLEAN" >"$DIFFOUT" 2>&1; then
   ok "diff -r 无任何差异 —— 两版只差命名（逐字节一致）"
 else
   bad "diff -r 有差异（$(wc -l <"$DIFFOUT") 行），见 $DIFFOUT"
